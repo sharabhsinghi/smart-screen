@@ -10,17 +10,9 @@ import {
   Lock,
   Loader2,
 } from "lucide-react";
+import type { SmartDevice, SmartHomeSettings, DeviceIcon } from "@/types";
 
-interface Device {
-  id: string;
-  name: string;
-  room: string;
-  on: boolean;
-  icon: keyof typeof ICONS;
-  endpoint: string;
-}
-
-const ICONS = {
+export const ICONS: Record<DeviceIcon, React.ComponentType<{ size?: number }>> = {
   lightbulb: Lightbulb,
   tv: Tv2,
   thermostat: Thermometer,
@@ -33,21 +25,23 @@ const ICONS = {
 const HA_BASE = process.env.NEXT_PUBLIC_HA_URL ?? "";
 const HA_TOKEN = process.env.NEXT_PUBLIC_HA_TOKEN ?? "";
 
-const INITIAL_DEVICES: Device[] = [
-  { id: "1", name: "Living Room", room: "Lights", on: false, icon: "lightbulb", endpoint: "light.living_room" },
-  { id: "2", name: "Bedroom", room: "Lights", on: false, icon: "lightbulb", endpoint: "light.bedroom" },
-  { id: "3", name: "TV", room: "Living Room", on: false, icon: "tv", endpoint: "media_player.tv" },
-  { id: "4", name: "Thermostat", room: "Home", on: true, icon: "thermostat", endpoint: "climate.home" },
-  { id: "5", name: "Speaker", room: "Kitchen", on: false, icon: "speaker", endpoint: "media_player.kitchen" },
-  { id: "6", name: "Front Door", room: "Security", on: true, icon: "lock", endpoint: "lock.front_door" },
+export const DEFAULT_DEVICES: SmartDevice[] = [
+  { id: "1", name: "Living Room", room: "Lights", icon: "lightbulb", endpoint: "light.living_room" },
+  { id: "2", name: "Bedroom", room: "Lights", icon: "lightbulb", endpoint: "light.bedroom" },
+  { id: "3", name: "TV", room: "Living Room", icon: "tv", endpoint: "media_player.tv" },
+  { id: "4", name: "Thermostat", room: "Home", icon: "thermostat", endpoint: "climate.home" },
+  { id: "5", name: "Speaker", room: "Kitchen", icon: "speaker", endpoint: "media_player.kitchen" },
+  { id: "6", name: "Front Door", room: "Security", icon: "lock", endpoint: "lock.front_door" },
 ];
 
-async function toggleDevice(device: Device): Promise<void> {
+interface Props {
+  settings?: SmartHomeSettings;
+}
+
+async function callHA(device: SmartDevice, turnOn: boolean): Promise<void> {
   if (!HA_BASE) return; // demo mode — no-op
-
   const domain = device.endpoint.split(".")[0];
-  const service = device.on ? `turn_off` : `turn_on`;
-
+  const service = turnOn ? "turn_on" : "turn_off";
   await fetch(`${HA_BASE}/api/services/${domain}/${service}`, {
     method: "POST",
     headers: {
@@ -58,20 +52,25 @@ async function toggleDevice(device: Device): Promise<void> {
   });
 }
 
-export default function SmartHomeWidget() {
-  const [devices, setDevices] = useState<Device[]>(INITIAL_DEVICES);
+export default function SmartHomeWidget({ settings }: Props) {
+  const deviceList = settings?.devices ?? DEFAULT_DEVICES;
+
+  // Runtime on/off state keyed by device id (undefined = use device default)
+  const [onStates, setOnStates] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState<string | null>(null);
   const isDemoMode = !HA_BASE;
 
-  const handleToggle = async (device: Device) => {
+  const isOn = (device: SmartDevice) => onStates[device.id] ?? false;
+
+  const handleToggle = async (device: SmartDevice) => {
+    const next = !isOn(device);
     setLoading(device.id);
+    setOnStates((prev) => ({ ...prev, [device.id]: next }));
     try {
-      await toggleDevice(device);
-      setDevices((prev) =>
-        prev.map((d) => (d.id === device.id ? { ...d, on: !d.on } : d))
-      );
+      await callHA(device, next);
     } catch {
-      // silently fail in demo mode
+      // revert on error
+      setOnStates((prev) => ({ ...prev, [device.id]: !next }));
     } finally {
       setLoading(null);
     }
@@ -90,16 +89,17 @@ export default function SmartHomeWidget() {
         )}
       </div>
       <div className="grid grid-cols-3 gap-2 flex-1">
-        {devices.map((device) => {
+        {deviceList.map((device) => {
           const Icon = ICONS[device.icon];
           const isLoading = loading === device.id;
+          const on = isOn(device);
           return (
             <button
               key={device.id}
               onClick={() => handleToggle(device)}
               disabled={isLoading}
               className={`flex flex-col items-center justify-center gap-1.5 rounded-xl p-3 transition-all duration-200
-                ${device.on
+                ${on
                   ? "bg-yellow-400/20 border border-yellow-400/40 text-yellow-300"
                   : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10"
                 }

@@ -2,10 +2,18 @@
 
 import { Droplets, Wind, Thermometer, RefreshCw, CloudOff } from "lucide-react";
 import { useWeather } from "@/hooks/useWeather";
+import type { WeatherSettings } from "@/types";
 import Image from "next/image";
 
-export default function WeatherWidget() {
-  const { weather, loading, error, refresh } = useWeather();
+interface Props {
+  settings?: WeatherSettings;
+}
+
+export default function WeatherWidget({ settings }: Props) {
+  const { weather, loading, error, refresh } = useWeather(
+    settings?.city ?? "Barrie,ON,CA",
+    settings?.units ?? "metric"
+  );
 
   if (loading) {
     return (
@@ -62,7 +70,7 @@ export default function WeatherWidget() {
       <div className="grid grid-cols-3 gap-2 mt-auto">
         <StatItem icon={<Thermometer size={14} />} label="Feels" value={`${weather.feelsLike}°`} />
         <StatItem icon={<Droplets size={14} />} label="Humidity" value={`${weather.humidity}%`} />
-        <StatItem icon={<Wind size={14} />} label="Wind" value={`${weather.windSpeed}km/h`} />
+        <StatItem icon={<Wind size={14} />} label="Wind" value={`${weather.windSpeed}${weather.windUnit}`} />
       </div>
     </div>
   );

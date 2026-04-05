@@ -245,7 +245,7 @@ export default function SmartDisplayPage() {
   const handleGridDragLeave = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       // Only clear if we're leaving the grid entirely
-      if (!gridRef.current?.contains(e.relatedTarget as Node)) {
+      if (!gridRef.current || !e.relatedTarget || !gridRef.current.contains(e.relatedTarget as Node)) {
         setDropTarget(null);
       }
     },

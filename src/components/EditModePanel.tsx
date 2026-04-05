@@ -14,6 +14,10 @@ import {
   Trash2,
 } from "lucide-react";
 import type { WidgetType, WidgetConfig } from "@/types";
+import {
+  MAX_SLIDE_INTERVAL_MS,
+  MIN_SLIDE_INTERVAL_MS,
+} from "@/lib/slideshow";
 
 const DEFAULT_SLIDESHOW_IMAGES = [
   "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80",
@@ -66,7 +70,9 @@ interface EditModePanelProps {
   onAdd: (type: WidgetType) => void;
   onClose: () => void;
   slideshowImages: string[];
+  slideshowIntervalMs: number;
   onSlideshowImagesChange: (images: string[]) => void;
+  onSlideshowIntervalChange: (intervalMs: number) => void;
 }
 
 const WIDGET_CATALOG: { type: WidgetType; label: string; icon: React.ReactNode }[] = [
@@ -82,7 +88,9 @@ export default function EditModePanel({
   onAdd,
   onClose,
   slideshowImages,
+  slideshowIntervalMs,
   onSlideshowImagesChange,
+  onSlideshowIntervalChange,
 }: EditModePanelProps) {
   const activeTypes = new Set(widgets.map((w) => w.type));
   const [newImageUrl, setNewImageUrl] = useState("");
@@ -172,6 +180,23 @@ export default function EditModePanel({
                     {label}
                   </button>
                 ))}
+              </div>
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-white/30">Slide timer</p>
+                  <span className="text-xs text-white/50">{Math.round(slideshowIntervalMs / 1000)}s</span>
+                </div>
+                <input
+                  type="number"
+                  min={MIN_SLIDE_INTERVAL_MS / 1000}
+                  max={MAX_SLIDE_INTERVAL_MS / 1000}
+                  step={1}
+                  value={Math.round(slideshowIntervalMs / 1000)}
+                  onChange={(e) => onSlideshowIntervalChange(Number(e.target.value) * 1000)}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-white/30"
+                />
+                <p className="mt-1 text-[11px] text-white/30">Set how many seconds each background image stays visible.</p>
               </div>
 
               {/* Current images */}

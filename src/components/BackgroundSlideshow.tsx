@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-
-const SLIDE_INTERVAL_MS = 8000; // 8 seconds between slide transitions
+import {
+  DEFAULT_SLIDE_INTERVAL_MS,
+  normalizeSlideIntervalMs,
+} from "@/lib/slideshow";
 
 interface BackgroundSlideshowProps {
   images?: string[];
+  intervalMs?: number;
 }
 
 // Gradient fallbacks are CSS strings shown when image URLs fail to load
@@ -27,16 +30,20 @@ const DEFAULT_IMAGES = [
   "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&q=80",
 ];
 
-export default function BackgroundSlideshow({ images = DEFAULT_IMAGES }: BackgroundSlideshowProps) {
+export default function BackgroundSlideshow({
+  images = DEFAULT_IMAGES,
+  intervalMs = DEFAULT_SLIDE_INTERVAL_MS,
+}: BackgroundSlideshowProps) {
   const [current, setCurrent] = useState(0);
   const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+  const normalizedIntervalMs = normalizeSlideIntervalMs(intervalMs);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % images.length);
-    }, SLIDE_INTERVAL_MS);
+    }, normalizedIntervalMs);
     return () => clearInterval(timer);
-  }, [images.length]);
+  }, [images.length, normalizedIntervalMs]);
 
   const handleImageError = (index: number) => {
     setFailedImages((prev) => new Set(prev).add(index));

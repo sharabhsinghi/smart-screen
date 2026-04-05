@@ -12,6 +12,10 @@ import ClockWidget from "@/components/widgets/ClockWidget";
 import WeatherWidget from "@/components/widgets/WeatherWidget";
 import CalendarWidget from "@/components/widgets/CalendarWidget";
 import SmartHomeWidget from "@/components/widgets/SmartHomeWidget";
+import {
+  DEFAULT_SLIDE_INTERVAL_MS,
+  normalizeSlideIntervalMs,
+} from "@/lib/slideshow";
 import type {
   WidgetConfig,
   WidgetType,
@@ -139,6 +143,7 @@ export default function SmartDisplayPage() {
   const [editMode, setEditMode] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [slideshowImages, setSlideshowImages] = useState<string[]>(DEFAULT_SLIDESHOW_IMAGES);
+  const [slideshowIntervalMs, setSlideshowIntervalMs] = useState(DEFAULT_SLIDE_INTERVAL_MS);
   const [settingsWidgetId, setSettingsWidgetId] = useState<string | null>(null);
 
   // Drag-and-drop state
@@ -262,7 +267,10 @@ export default function SmartDisplayPage() {
   return (
     <div className="relative isolate w-screen h-screen overflow-hidden bg-black select-none">
       {/* Background slideshow */}
-      <BackgroundSlideshow images={slideshowImages} />
+      <BackgroundSlideshow
+        images={slideshowImages}
+        intervalMs={slideshowIntervalMs}
+      />
 
       {/* Main content area */}
       <div className="relative z-10 w-full h-full flex flex-col p-6 gap-4">
@@ -351,7 +359,11 @@ export default function SmartDisplayPage() {
         onAdd={addWidget}
         onClose={() => setEditPanelOpen(false)}
         slideshowImages={slideshowImages}
+        slideshowIntervalMs={slideshowIntervalMs}
         onSlideshowImagesChange={setSlideshowImages}
+        onSlideshowIntervalChange={(intervalMs) => {
+          setSlideshowIntervalMs(normalizeSlideIntervalMs(intervalMs));
+        }}
       />
 
       {/* Widget settings modal */}

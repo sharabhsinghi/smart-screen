@@ -265,7 +265,7 @@ export default function SmartDisplayPage() {
   const draggingWidget = draggingId ? widgets.find((w) => w.id === draggingId) : null;
 
   return (
-    <div className="relative isolate w-screen h-screen overflow-hidden bg-black select-none">
+    <div className="relative isolate min-h-dvh w-full overflow-x-hidden bg-black select-none">
       {/* Background slideshow */}
       <BackgroundSlideshow
         images={slideshowImages}
@@ -273,7 +273,7 @@ export default function SmartDisplayPage() {
       />
 
       {/* Main content area */}
-      <div className="relative z-10 w-full h-full flex flex-col p-6 gap-4">
+      <div className="relative z-10 flex min-h-dvh w-full flex-col gap-4 p-6">
         {/* Widget grid */}
         <div
           ref={gridRef}

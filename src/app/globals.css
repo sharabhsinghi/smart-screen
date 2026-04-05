@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+html,
+body {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #000;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  /* Prevent text selection on touch devices */
+  -webkit-user-select: none;
+  user-select: none;
+  /* Disable tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Hide scrollbars utility class */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

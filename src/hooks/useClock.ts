@@ -1,11 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
-const PLACEHOLDER_TIME = "--:--";
-const PLACEHOLDER_SECONDS = "--";
-
-export function useClock() {
+export function useClock(timezone: string = "local", format24h: boolean = true) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -15,20 +12,39 @@ export function useClock() {
     return () => clearInterval(timer);
   }, []);
 
+  const formatters = useMemo(() => {
+    const tz = timezone === "local" ? undefined : timezone;
+    return {
+      parts: new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: !format24h,
+      }),
+      date: new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    };
+  }, [timezone, format24h]);
+
   if (!now) {
-    return { time: PLACEHOLDER_TIME, seconds: PLACEHOLDER_SECONDS, dateStr: "" };
+    return { time: "--:--", seconds: "--", period: "", dateStr: "" };
   }
 
-  const hours = now.getHours().toString().padStart(2, "0");
-  const minutes = now.getMinutes().toString().padStart(2, "0");
-  const seconds = now.getSeconds().toString().padStart(2, "0");
+  const parts = formatters.parts.formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
 
-  const dateStr = now.toLocaleDateString("en-CA", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const hours = get("hour");
+  const minutes = get("minute");
+  const seconds = get("second");
+  const period = get("dayPeriod"); // "AM" / "PM" in 12-hour mode, "" in 24-hour mode
 
-  return { time: `${hours}:${minutes}`, seconds, dateStr };
+  const dateStr = formatters.date.format(now);
+
+  return { time: `${hours}:${minutes}`, seconds, period, dateStr };
 }

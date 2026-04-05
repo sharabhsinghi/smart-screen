@@ -260,7 +260,7 @@ export default function SmartDisplayPage() {
   const draggingWidget = draggingId ? widgets.find((w) => w.id === draggingId) : null;
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-black select-none">
+    <div className="relative isolate w-screen h-screen overflow-hidden bg-black select-none">
       {/* Background slideshow */}
       <BackgroundSlideshow images={slideshowImages} />
 

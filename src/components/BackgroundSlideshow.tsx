@@ -43,7 +43,7 @@ export default function BackgroundSlideshow({ images = DEFAULT_IMAGES }: Backgro
   };
 
   return (
-    <div className="fixed inset-0 w-full h-full overflow-hidden -z-10">
+    <div className="fixed inset-0 z-0 h-full w-full overflow-hidden pointer-events-none">
       <AnimatePresence>
         <motion.div
           key={current}

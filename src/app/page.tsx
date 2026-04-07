@@ -8,43 +8,48 @@ import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import WidgetWrapper, { SIZE_SPANS } from "@/components/WidgetWrapper";
 import EditModePanel from "@/components/EditModePanel";
 import WidgetSettingsModal from "@/components/WidgetSettingsModal";
+import CalendarWidget from "@/components/widgets/CalendarWidget";
 import ClockWidget from "@/components/widgets/ClockWidget";
 import WeatherWidget from "@/components/widgets/WeatherWidget";
-import CalendarWidget from "@/components/widgets/CalendarWidget";
+import TasksWidget from "@/components/widgets/TasksWidget";
 import SmartHomeWidget from "@/components/widgets/SmartHomeWidget";
 import {
   DEFAULT_SLIDE_INTERVAL_MS,
   normalizeSlideIntervalMs,
 } from "@/lib/slideshow";
+import {
+  DEFAULT_SLIDESHOW_IMAGES,
+  isAndroidNativePlatform,
+  loadPersistedSlideshowImages,
+  persistSlideshowImages,
+  pickAndImportSlideshowImages,
+  removeStoredSlideshowImages,
+} from "@/lib/slideshowMedia";
 import type {
   WidgetConfig,
   WidgetType,
   WidgetSize,
+  CalendarSettings,
   ClockSettings,
   WeatherSettings,
   SmartHomeSettings,
+  SlideshowImage,
 } from "@/types";
 
 const GRID_COLS = 4;
 const GRID_ROWS = 3;
-
-const DEFAULT_SLIDESHOW_IMAGES = [
-  "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80",
-  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1920&q=80",
-  "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=1920&q=80",
-  "https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?w=1920&q=80",
-  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&q=80",
-];
+const SLIDESHOW_INTERVAL_STORAGE_KEY = "smart-screen:slideshow-interval:v1";
 
 const DEFAULT_WIDGETS: WidgetConfig[] = [
-  { id: "clock", type: "clock", size: "medium", position: { col: 1, row: 1 } },
-  { id: "weather", type: "weather", size: "small", position: { col: 3, row: 1 } },
-  { id: "calendar", type: "calendar", size: "medium", position: { col: 1, row: 2 } },
-  { id: "smarthome", type: "smarthome", size: "large", position: { col: 3, row: 2 } },
+  { id: "clock", type: "clock", size: "small", position: { col: 1, row: 1 } },
+  { id: "weather", type: "weather", size: "small", position: { col: 1, row: 3 } },
+  { id: "tasks", type: "tasks", size: "medium", position: { col: 2, row: 2 } },
+  { id: "smarthome", type: "smarthome", size: "small", position: { col: 3, row: 1 } },
+  { id: "calendar", type: "calendar", size: "medium", position: { col: 3, row: 2 } },
 ];
 
 // Widgets that have configurable settings
-const WIDGETS_WITH_SETTINGS: WidgetType[] = ["clock", "weather", "smarthome"];
+const WIDGETS_WITH_SETTINGS: WidgetType[] = ["clock", "weather", "calendar", "smarthome"];
 
 /** Returns all grid cells occupied by a widget */
 function getOccupiedCells(widget: WidgetConfig) {
@@ -128,7 +133,9 @@ function renderWidget(widget: WidgetConfig) {
     case "weather":
       return <WeatherWidget settings={widget.settings as WeatherSettings | undefined} />;
     case "calendar":
-      return <CalendarWidget />;
+      return <CalendarWidget settings={widget.settings as CalendarSettings | undefined} />;
+    case "tasks":
+      return <TasksWidget />;
     case "smarthome":
       return (
         <SmartHomeWidget settings={widget.settings as SmartHomeSettings | undefined} />
@@ -142,14 +149,17 @@ export default function SmartDisplayPage() {
   const [widgets, setWidgets] = useState<WidgetConfig[]>(DEFAULT_WIDGETS);
   const [editMode, setEditMode] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
-  const [slideshowImages, setSlideshowImages] = useState<string[]>(DEFAULT_SLIDESHOW_IMAGES);
+  const [slideshowImages, setSlideshowImages] = useState<SlideshowImage[]>(DEFAULT_SLIDESHOW_IMAGES);
   const [slideshowIntervalMs, setSlideshowIntervalMs] = useState(DEFAULT_SLIDE_INTERVAL_MS);
   const [settingsWidgetId, setSettingsWidgetId] = useState<string | null>(null);
+  const [slideshowImportPending, setSlideshowImportPending] = useState(false);
+  const [slideshowImportError, setSlideshowImportError] = useState<string | null>(null);
 
   // Drag-and-drop state
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ col: number; row: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const slideshowLoadedRef = useRef(false);
 
   // Initialize Capacitor plugins (status bar + navigation bar)
   useEffect(() => {
@@ -182,6 +192,110 @@ export default function SmartDisplayPage() {
 
     initCapacitor();
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+
+    const loadSlideshowSettings = async () => {
+      const [storedImages] = await Promise.all([loadPersistedSlideshowImages()]);
+      const storedInterval = window.localStorage.getItem(SLIDESHOW_INTERVAL_STORAGE_KEY);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (storedImages && storedImages.length > 0) {
+        setSlideshowImages(storedImages);
+      }
+
+      if (storedInterval) {
+        setSlideshowIntervalMs(normalizeSlideIntervalMs(Number(storedInterval)));
+      }
+
+      slideshowLoadedRef.current = true;
+    };
+
+    void loadSlideshowSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !slideshowLoadedRef.current) return;
+    persistSlideshowImages(slideshowImages);
+  }, [slideshowImages]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !slideshowLoadedRef.current) return;
+    window.localStorage.setItem(
+      SLIDESHOW_INTERVAL_STORAGE_KEY,
+      String(slideshowIntervalMs)
+    );
+  }, [slideshowIntervalMs]);
+
+  const handleSlideshowImagesChange = useCallback((nextImages: SlideshowImage[]) => {
+    setSlideshowImportError(null);
+    setSlideshowImages((previousImages) => {
+      if (nextImages.length === 0) {
+        return previousImages;
+      }
+
+      const retainedPaths = new Set(
+        nextImages
+          .map((image) => image.filePath)
+          .filter((filePath): filePath is string => Boolean(filePath))
+      );
+      const removedImages = previousImages.filter(
+        (image) => image.filePath && !retainedPaths.has(image.filePath)
+      );
+
+      void removeStoredSlideshowImages(removedImages);
+      return nextImages;
+    });
+  }, []);
+
+  const importSlideshowImages = useCallback(
+    async (mode: "replace" | "append") => {
+      if (slideshowImportPending) {
+        return;
+      }
+
+      setSlideshowImportPending(true);
+      setSlideshowImportError(null);
+
+      try {
+        const importedImages = await pickAndImportSlideshowImages();
+        if (importedImages.length === 0) {
+          return;
+        }
+
+        setSlideshowImages((previousImages) => {
+          const nextImages =
+            mode === "replace"
+              ? importedImages
+              : [...previousImages, ...importedImages];
+
+          if (mode === "replace") {
+            void removeStoredSlideshowImages(previousImages);
+          }
+
+          return nextImages;
+        });
+      } catch (error) {
+        console.error(error);
+        setSlideshowImportError(
+          "Could not import photos. Check that Google Photos or Gallery access is available on this device and try again."
+        );
+      } finally {
+        setSlideshowImportPending(false);
+      }
+    },
+    [slideshowImportPending]
+  );
 
   const removeWidget = useCallback((id: string) => {
     setWidgets((prev) => prev.filter((w) => w.id !== id));
@@ -360,9 +474,15 @@ export default function SmartDisplayPage() {
         onClose={() => setEditPanelOpen(false)}
         slideshowImages={slideshowImages}
         slideshowIntervalMs={slideshowIntervalMs}
-        onSlideshowImagesChange={setSlideshowImages}
+        onSlideshowImagesChange={handleSlideshowImagesChange}
         onSlideshowIntervalChange={(intervalMs) => {
           setSlideshowIntervalMs(normalizeSlideIntervalMs(intervalMs));
+        }}
+        canImportFromDevice={isAndroidNativePlatform()}
+        importPending={slideshowImportPending}
+        importError={slideshowImportError}
+        onImportFromDevice={(mode) => {
+          void importSlideshowImages(mode);
         }}
       />
 

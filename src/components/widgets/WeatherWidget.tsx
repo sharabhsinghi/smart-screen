@@ -1,18 +1,56 @@
 "use client";
 
-import { Droplets, Wind, Thermometer, RefreshCw, CloudOff } from "lucide-react";
+import {
+  Cloud,
+  CloudFog,
+  CloudMoon,
+  CloudOff,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Sun,
+  Thermometer,
+  RefreshCw,
+  Droplets,
+  Wind,
+  Zap,
+} from "lucide-react";
 import { useWeather } from "@/hooks/useWeather";
 import type { WeatherSettings } from "@/types";
-import Image from "next/image";
 
 interface Props {
   settings?: WeatherSettings;
 }
 
+function WeatherGlyph({ icon }: { icon: string }) {
+  switch (icon) {
+    case "clear-day":
+      return <Sun size={64} strokeWidth={1.5} className="text-amber-200" />;
+    case "clear-night":
+      return <CloudMoon size={64} strokeWidth={1.5} className="text-sky-100" />;
+    case "partly-cloudy-day":
+      return <CloudSun size={64} strokeWidth={1.5} className="text-amber-100" />;
+    case "partly-cloudy-night":
+      return <CloudMoon size={64} strokeWidth={1.5} className="text-slate-100" />;
+    case "fog":
+      return <CloudFog size={64} strokeWidth={1.5} className="text-slate-100" />;
+    case "rain":
+      return <CloudRain size={64} strokeWidth={1.5} className="text-sky-100" />;
+    case "snow":
+      return <CloudSnow size={64} strokeWidth={1.5} className="text-slate-100" />;
+    case "storm":
+      return <Zap size={64} strokeWidth={1.5} className="text-yellow-200" />;
+    default:
+      return <Cloud size={64} strokeWidth={1.5} className="text-white/90" />;
+  }
+}
+
 export default function WeatherWidget({ settings }: Props) {
   const { weather, loading, error, refresh } = useWeather(
-    settings?.city ?? "Barrie,ON,CA",
-    settings?.units ?? "metric"
+    settings?.city ?? "Barrie, ON, Canada",
+    settings?.units ?? "metric",
+    settings?.latitude,
+    settings?.longitude,
   );
 
   if (loading) {
@@ -54,13 +92,7 @@ export default function WeatherWidget({ settings }: Props) {
       </div>
 
       <div className="flex items-center gap-3">
-        <Image
-          src={`https://openweathermap.org/img/wn/${weather.icon}@2x.png`}
-          alt={weather.description}
-          width={64}
-          height={64}
-          unoptimized
-        />
+        <WeatherGlyph icon={weather.icon} />
         <div>
           <div className="text-5xl font-light leading-none">{weather.temp}°</div>
           <div className="text-sm text-white/70 capitalize mt-1">{weather.description}</div>

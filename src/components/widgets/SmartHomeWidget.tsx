@@ -30,8 +30,8 @@ export const DEFAULT_DEVICES: SmartDevice[] = [
   { id: "2", name: "Bedroom", room: "Lights", icon: "lightbulb", endpoint: "light.bedroom" },
   { id: "3", name: "TV", room: "Living Room", icon: "tv", endpoint: "media_player.tv" },
   { id: "4", name: "Thermostat", room: "Home", icon: "thermostat", endpoint: "climate.home" },
-  { id: "5", name: "Speaker", room: "Kitchen", icon: "speaker", endpoint: "media_player.kitchen" },
-  { id: "6", name: "Front Door", room: "Security", icon: "lock", endpoint: "lock.front_door" },
+  // { id: "5", name: "Speaker", room: "Kitchen", icon: "speaker", endpoint: "media_player.kitchen" },
+  // { id: "6", name: "Front Door", room: "Security", icon: "lock", endpoint: "lock.front_door" },
 ];
 
 interface Props {
@@ -77,7 +77,7 @@ export default function SmartHomeWidget({ settings }: Props) {
   };
 
   return (
-    <div className="flex flex-col h-full gap-3 text-white">
+    <div className="flex h-full min-h-0 flex-col gap-3 text-white">
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-white/70 uppercase tracking-wider">
           Smart Home
@@ -88,34 +88,36 @@ export default function SmartHomeWidget({ settings }: Props) {
           </span>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2 flex-1">
-        {deviceList.map((device) => {
-          const Icon = ICONS[device.icon];
-          const isLoading = loading === device.id;
-          const on = isOn(device);
-          return (
-            <button
-              key={device.id}
-              onClick={() => handleToggle(device)}
-              disabled={isLoading}
-              className={`flex flex-col items-center justify-center gap-1.5 rounded-xl p-3 transition-all duration-200
-                ${on
-                  ? "bg-yellow-400/20 border border-yellow-400/40 text-yellow-300"
-                  : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10"
-                }
-                ${isLoading ? "opacity-60 cursor-wait" : "cursor-pointer active:scale-95"}
-              `}
-            >
-              {isLoading ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <Icon size={20} />
-              )}
-              <span className="text-xs font-medium leading-tight text-center">{device.name}</span>
-              <span className="text-[10px] text-current/60 opacity-60">{device.room}</span>
-            </button>
-          );
-        })}
+      <div className="min-h-0 max-h-56 flex-1 overflow-y-auto pr-1 scrollbar-hide">
+        <div className="grid grid-cols-3 gap-2">
+          {deviceList.map((device) => {
+            const Icon = ICONS[device.icon];
+            const isLoading = loading === device.id;
+            const on = isOn(device);
+            return (
+              <button
+                key={device.id}
+                onClick={() => handleToggle(device)}
+                disabled={isLoading}
+                className={`flex flex-col items-center justify-center gap-1.5 rounded-xl p-3 transition-all duration-200
+                  ${on
+                    ? "bg-yellow-400/20 border border-yellow-400/40 text-yellow-300"
+                    : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10"
+                  }
+                  ${isLoading ? "opacity-60 cursor-wait" : "cursor-pointer active:scale-95"}
+                `}
+              >
+                {isLoading ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Icon size={20} />
+                )}
+                <span className="text-xs font-medium leading-tight text-center">{device.name}</span>
+                <span className="text-[10px] text-current/60 opacity-60">{device.room}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

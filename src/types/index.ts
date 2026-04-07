@@ -2,6 +2,7 @@ export type WidgetType =
   | "clock"
   | "weather"
   | "calendar"
+  | "tasks"
   | "smarthome";
 
 export type WidgetSize = "small" | "medium" | "large";
@@ -16,6 +17,15 @@ export interface ClockSettings {
 export interface WeatherSettings {
   city: string;
   units: "metric" | "imperial";
+  /** Stored when the user picks a city from geocoding suggestions — bypasses geocoding on re-render */
+  latitude?: number;
+  longitude?: number;
+}
+
+export interface CalendarSettings {
+  calendarId: string;
+  calendarName?: string;
+  maxEvents: number;
 }
 
 export interface SmartDevice {
@@ -35,7 +45,7 @@ export interface WidgetConfig {
   type: WidgetType;
   size: WidgetSize;
   position: { col: number; row: number };
-  settings?: ClockSettings | WeatherSettings | SmartHomeSettings;
+  settings?: ClockSettings | WeatherSettings | CalendarSettings | SmartHomeSettings;
 }
 
 export interface WeatherData {
@@ -54,4 +64,15 @@ export interface Task {
   title: string;
   time?: string;
   done: boolean;
+  completedAt?: number;
+}
+
+export type SlideshowImageOrigin = "preset" | "url" | "device";
+
+export interface SlideshowImage {
+  id: string;
+  src: string;
+  label: string;
+  origin: SlideshowImageOrigin;
+  filePath?: string;
 }

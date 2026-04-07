@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Image from "next/image";
 import {
   DEFAULT_SLIDE_INTERVAL_MS,
   normalizeSlideIntervalMs,
 } from "@/lib/slideshow";
+import { DEFAULT_SLIDESHOW_IMAGES } from "@/lib/slideshowMedia";
+import type { SlideshowImage } from "@/types";
 
 interface BackgroundSlideshowProps {
-  images?: string[];
+  images?: SlideshowImage[];
   intervalMs?: number;
 }
 
@@ -22,21 +23,15 @@ const GRADIENT_FALLBACKS = [
   "linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #2d2d2d 100%)",
 ];
 
-const DEFAULT_IMAGES = [
-  "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80",
-  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=1920&q=80",
-  "https://images.unsplash.com/photo-1447752875215-b2761acb3c5d?w=1920&q=80",
-  "https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?w=1920&q=80",
-  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=1920&q=80",
-];
-
 export default function BackgroundSlideshow({
-  images = DEFAULT_IMAGES,
+  images = DEFAULT_SLIDESHOW_IMAGES,
   intervalMs = DEFAULT_SLIDE_INTERVAL_MS,
 }: BackgroundSlideshowProps) {
   const [current, setCurrent] = useState(0);
-  const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const normalizedIntervalMs = normalizeSlideIntervalMs(intervalMs);
+  const safeCurrent = current % images.length;
+  const currentImage = images[safeCurrent];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -45,36 +40,34 @@ export default function BackgroundSlideshow({
     return () => clearInterval(timer);
   }, [images.length, normalizedIntervalMs]);
 
-  const handleImageError = (index: number) => {
-    setFailedImages((prev) => new Set(prev).add(index));
+  const handleImageError = (src: string) => {
+    setFailedImages((prev) => new Set(prev).add(src));
   };
 
   return (
     <div className="fixed inset-0 z-0 h-full w-full overflow-hidden pointer-events-none">
       <AnimatePresence>
         <motion.div
-          key={current}
+          key={currentImage.id}
           className="absolute inset-0"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 2, ease: "easeInOut" }}
           style={
-            failedImages.has(current)
-              ? { background: GRADIENT_FALLBACKS[current % GRADIENT_FALLBACKS.length] }
+            failedImages.has(currentImage.src)
+              ? { background: GRADIENT_FALLBACKS[safeCurrent % GRADIENT_FALLBACKS.length] }
               : undefined
           }
         >
-          {!failedImages.has(current) && (
-            <Image
-              src={images[current]}
-              alt={`Slideshow background ${current + 1}`}
-              fill
-              priority
-              className="object-cover"
-              sizes="100vw"
-              unoptimized
-              onError={() => handleImageError(current)}
+          {!failedImages.has(currentImage.src) && (
+            // Local Capacitor file URLs are more reliable here than next/image.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={currentImage.src}
+              alt={`Slideshow background ${safeCurrent + 1}`}
+              className="h-full w-full object-cover"
+              onError={() => handleImageError(currentImage.src)}
             />
           )}
           {/* Dark overlay for readability */}

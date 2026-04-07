@@ -16,7 +16,8 @@ A **Smart Display** Android app for tablets built with **Next.js** (App Router),
 | Widget | Description |
 |--------|-------------|
 | 🕐 **Clock** | Live digital clock (HH:mm:ss) with full date display. Updates every second. |
-| 🌤 **Weather** | Current conditions from OpenWeatherMap for Barrie, ON. Refreshes every 15 minutes. |
+| 🌤 **Weather** | Current conditions from Open-Meteo for Barrie, ON. Refreshes every 15 minutes. |
+| 📆 **Calendar** | Google Calendar month view with highlighted event days and upcoming events. |
 | 📅 **Tasks** | Today's task list with check-off, add new tasks, and pending count. |
 | 🏠 **Smart Home** | 6-button grid to toggle smart lights/devices via Home Assistant REST API. |
 
@@ -52,9 +53,11 @@ cp .env.local.example .env.local
 
 | Variable | Description |
 |----------|-------------|
-| `NEXT_PUBLIC_OPENWEATHER_API_KEY` | Free API key from [openweathermap.org](https://openweathermap.org/api) |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth client ID for Google Calendar read-only access |
 | `NEXT_PUBLIC_HA_URL` | Home Assistant base URL, e.g. `http://homeassistant.local:8123` |
 | `NEXT_PUBLIC_HA_TOKEN` | Home Assistant long-lived access token |
+
+Weather data now uses Open-Meteo and does not require an API key.
 
 ### 3. Run in development
 ```bash
@@ -89,11 +92,17 @@ src/
 │   ├── BackgroundSlideshow.tsx  # Framer Motion cross-fade slideshow
 │   ├── WidgetWrapper.tsx        # Glassmorphism panel + edit mode controls
 │   ├── EditModePanel.tsx        # Slide-in panel for add/remove widgets
+│   ├── WidgetSettingsModal.tsx  # Widget settings and integrations
 │   └── widgets/
 │       ├── ClockWidget.tsx      # Digital clock + date
-│       ├── WeatherWidget.tsx    # OpenWeatherMap widget
-│       ├── CalendarWidget.tsx   # Today's tasks checklist
+│       ├── WeatherWidget.tsx    # Open-Meteo widget
+│       ├── CalendarWidget.tsx   # Google Calendar month view + events
+│       ├── TasksWidget.tsx      # Task checklist with delayed removal
 │       └── SmartHomeWidget.tsx  # Smart light toggle grid
+├── lib/
+│   ├── googleCalendar.ts   # Google Identity + Calendar API helpers
+│   ├── slideshow.ts        # Slideshow timing helpers
+│   └── slideshowMedia.ts   # Slideshow media sources and imports
 ├── hooks/
 │   ├── useClock.ts        # 1-second interval clock hook
 │   └── useWeather.ts      # 15-minute weather refresh hook
@@ -110,6 +119,7 @@ capacitor.config.ts        # Capacitor Android configuration
 - **[Framer Motion](https://www.framer.com/motion/)** — Background slideshow transitions
 - **[Lucide React](https://lucide.dev/)** — Icons
 - **[Capacitor](https://capacitorjs.com/)** — Native Android wrapper
+- **[Google Identity Services](https://developers.google.com/identity/oauth2/web/guides/overview)** — Client-side Google Calendar auth
 - **[@capacitor/status-bar](https://capacitorjs.com/docs/apis/status-bar)** — Hide system status bar
 - **[@capgo/capacitor-navigation-bar](https://www.npmjs.com/package/@capgo/capacitor-navigation-bar)** — Transparent navigation bar
 - **[@capacitor-community/keep-awake](https://github.com/capacitor-community/keep-awake)** — Prevent screen sleep

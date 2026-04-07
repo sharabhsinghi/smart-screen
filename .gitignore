@@ -21,7 +21,7 @@
 /build
 
 # Capacitor (generated native projects)
-/android
+# android source is committed — build artifacts are ignored via android/.gitignore
 /ios
 
 # misc

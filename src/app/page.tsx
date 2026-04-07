@@ -4,7 +4,6 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
 import { Settings, X } from "lucide-react";
 
-import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import WidgetWrapper, { SIZE_SPANS } from "@/components/WidgetWrapper";
 import EditModePanel from "@/components/EditModePanel";
 import WidgetSettingsModal from "@/components/WidgetSettingsModal";
@@ -13,18 +12,7 @@ import ClockWidget from "@/components/widgets/ClockWidget";
 import WeatherWidget from "@/components/widgets/WeatherWidget";
 import TasksWidget from "@/components/widgets/TasksWidget";
 import SmartHomeWidget from "@/components/widgets/SmartHomeWidget";
-import {
-  DEFAULT_SLIDE_INTERVAL_MS,
-  normalizeSlideIntervalMs,
-} from "@/lib/slideshow";
-import {
-  DEFAULT_SLIDESHOW_IMAGES,
-  isAndroidNativePlatform,
-  loadPersistedSlideshowImages,
-  persistSlideshowImages,
-  pickAndImportSlideshowImages,
-  removeStoredSlideshowImages,
-} from "@/lib/slideshowMedia";
+import SlideshowWidget from "@/components/widgets/SlideshowWidget";
 import type {
   WidgetConfig,
   WidgetType,
@@ -33,27 +21,39 @@ import type {
   ClockSettings,
   WeatherSettings,
   SmartHomeSettings,
-  SlideshowImage,
+  SlideshowSettings,
 } from "@/types";
 
 const GRID_COLS = 4;
 const GRID_ROWS = 3;
-const SLIDESHOW_INTERVAL_STORAGE_KEY = "smart-screen:slideshow-interval:v1";
+const WIDGETS_STORAGE_KEY = "smart-screen:widgets:v2";
+
+/**
+ * Widget types whose natural "medium" orientation is vertical (1 col × 2 rows)
+ * rather than the default horizontal (2 cols × 1 row).
+ */
+const WIDGET_MEDIUM_VERTICAL = new Set<WidgetType>(["weather", "tasks"]);
 
 const DEFAULT_WIDGETS: WidgetConfig[] = [
+  // Col 1, Row 1 — clock (small 1×1)
   { id: "clock", type: "clock", size: "small", position: { col: 1, row: 1 } },
-  { id: "weather", type: "weather", size: "small", position: { col: 1, row: 3 } },
-  { id: "tasks", type: "tasks", size: "medium", position: { col: 2, row: 2 } },
-  { id: "smarthome", type: "smarthome", size: "small", position: { col: 3, row: 1 } },
-  { id: "calendar", type: "calendar", size: "medium", position: { col: 3, row: 2 } },
+  // Cols 2–3, Row 1 — smarthome (medium 2×1 horizontal)
+  { id: "smarthome", type: "smarthome", size: "medium", position: { col: 2, row: 1 } },
+  // Col 4, Rows 1–2 — weather (medium 1×2 vertical)
+  { id: "weather", type: "weather", size: "medium", position: { col: 4, row: 1 }, colSpan: 1, rowSpan: 2 },
+  // Col 1, Rows 2–3 — tasks (medium 1×2 vertical)
+  { id: "tasks", type: "tasks", size: "medium", position: { col: 1, row: 2 }, colSpan: 1, rowSpan: 2 },
+  // Cols 2–3, Row 2 — calendar (medium 2×1 horizontal)
+  { id: "calendar", type: "calendar", size: "medium", position: { col: 2, row: 2 } },
 ];
 
 // Widgets that have configurable settings
-const WIDGETS_WITH_SETTINGS: WidgetType[] = ["clock", "weather", "calendar", "smarthome"];
+const WIDGETS_WITH_SETTINGS: WidgetType[] = ["clock", "weather", "calendar", "smarthome", "slideshow"];
 
 /** Returns all grid cells occupied by a widget */
 function getOccupiedCells(widget: WidgetConfig) {
-  const { colSpan, rowSpan } = SIZE_SPANS[widget.size];
+  const colSpan = widget.colSpan ?? SIZE_SPANS[widget.size].colSpan;
+  const rowSpan = widget.rowSpan ?? SIZE_SPANS[widget.size].rowSpan;
   const cells: { col: number; row: number }[] = [];
   for (let r = widget.position.row; r < widget.position.row + rowSpan; r++) {
     for (let c = widget.position.col; c < widget.position.col + colSpan; c++) {
@@ -63,15 +63,22 @@ function getOccupiedCells(widget: WidgetConfig) {
   return cells;
 }
 
-/** Checks if a target position is in bounds and not overlapping other widgets */
+/** Checks if a target position is in bounds and not overlapping other widgets.
+ * Non-slideshow widgets are allowed to overlap slideshow widgets.
+ * Slideshow widgets may not overlap anything.
+ */
 function isValidDrop(
   draggingId: string,
+  draggingType: WidgetType,
   targetCol: number,
   targetRow: number,
   size: WidgetSize,
-  widgets: WidgetConfig[]
+  widgets: WidgetConfig[],
+  overrideColSpan?: number,
+  overrideRowSpan?: number
 ): boolean {
-  const { colSpan, rowSpan } = SIZE_SPANS[size];
+  const colSpan = overrideColSpan ?? SIZE_SPANS[size].colSpan;
+  const rowSpan = overrideRowSpan ?? SIZE_SPANS[size].rowSpan;
   if (targetCol < 1 || targetCol + colSpan - 1 > GRID_COLS) return false;
   if (targetRow < 1 || targetRow + rowSpan - 1 > GRID_ROWS) return false;
   const targetCells: { col: number; row: number }[] = [];
@@ -82,6 +89,8 @@ function isValidDrop(
   }
   return !widgets.some((w) => {
     if (w.id === draggingId) return false;
+    // Non-slideshow widgets may overlap slideshow widgets (they sit on top)
+    if (draggingType !== "slideshow" && w.type === "slideshow") return false;
     const wCells = getOccupiedCells(w);
     return targetCells.some((tc) =>
       wCells.some((wc) => wc.col === tc.col && wc.row === tc.row)
@@ -103,9 +112,12 @@ function getGridCell(
   return { col, row };
 }
 
-/** Finds the first free position for a widget of the given size */
-function findFreePosition(size: WidgetSize, existing: WidgetConfig[]): { col: number; row: number } {
-  const { colSpan, rowSpan } = SIZE_SPANS[size];
+/** Finds the first free position for a widget of the given size.
+ * When placing a non-slideshow widget, cells occupied only by slideshow widgets are treated as free.
+ */
+function findFreePosition(size: WidgetSize, existing: WidgetConfig[], overrideColSpan?: number, overrideRowSpan?: number, type?: WidgetType): { col: number; row: number } {
+  const colSpan = overrideColSpan ?? SIZE_SPANS[size].colSpan;
+  const rowSpan = overrideRowSpan ?? SIZE_SPANS[size].rowSpan;
   for (let row = 1; row <= GRID_ROWS - rowSpan + 1; row++) {
     for (let col = 1; col <= GRID_COLS - colSpan + 1; col++) {
       const targetCells: { col: number; row: number }[] = [];
@@ -115,6 +127,8 @@ function findFreePosition(size: WidgetSize, existing: WidgetConfig[]): { col: nu
         }
       }
       const occupied = existing.some((w) => {
+        // Non-slideshow widgets can occupy the same cells as slideshow widgets
+        if (type !== "slideshow" && w.type === "slideshow") return false;
         const wCells = getOccupiedCells(w);
         return targetCells.some((tc) =>
           wCells.some((wc) => wc.col === tc.col && wc.row === tc.row)
@@ -135,11 +149,13 @@ function renderWidget(widget: WidgetConfig) {
     case "calendar":
       return <CalendarWidget settings={widget.settings as CalendarSettings | undefined} />;
     case "tasks":
-      return <TasksWidget />;
+      return <TasksWidget size={widget.size} />;
     case "smarthome":
       return (
         <SmartHomeWidget settings={widget.settings as SmartHomeSettings | undefined} />
       );
+    case "slideshow":
+      return <SlideshowWidget settings={widget.settings as SlideshowSettings | undefined} />;
     default:
       return null;
   }
@@ -149,17 +165,13 @@ export default function SmartDisplayPage() {
   const [widgets, setWidgets] = useState<WidgetConfig[]>(DEFAULT_WIDGETS);
   const [editMode, setEditMode] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
-  const [slideshowImages, setSlideshowImages] = useState<SlideshowImage[]>(DEFAULT_SLIDESHOW_IMAGES);
-  const [slideshowIntervalMs, setSlideshowIntervalMs] = useState(DEFAULT_SLIDE_INTERVAL_MS);
   const [settingsWidgetId, setSettingsWidgetId] = useState<string | null>(null);
-  const [slideshowImportPending, setSlideshowImportPending] = useState(false);
-  const [slideshowImportError, setSlideshowImportError] = useState<string | null>(null);
 
   // Drag-and-drop state
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ col: number; row: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const slideshowLoadedRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
 
   // Initialize Capacitor plugins (status bar + navigation bar)
   useEffect(() => {
@@ -196,106 +208,25 @@ export default function SmartDisplayPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    let cancelled = false;
-
-    const loadSlideshowSettings = async () => {
-      const [storedImages] = await Promise.all([loadPersistedSlideshowImages()]);
-      const storedInterval = window.localStorage.getItem(SLIDESHOW_INTERVAL_STORAGE_KEY);
-
-      if (cancelled) {
-        return;
-      }
-
-      if (storedImages && storedImages.length > 0) {
-        setSlideshowImages(storedImages);
-      }
-
-      if (storedInterval) {
-        setSlideshowIntervalMs(normalizeSlideIntervalMs(Number(storedInterval)));
-      }
-
-      slideshowLoadedRef.current = true;
-    };
-
-    void loadSlideshowSettings();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !slideshowLoadedRef.current) return;
-    persistSlideshowImages(slideshowImages);
-  }, [slideshowImages]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !slideshowLoadedRef.current) return;
-    window.localStorage.setItem(
-      SLIDESHOW_INTERVAL_STORAGE_KEY,
-      String(slideshowIntervalMs)
-    );
-  }, [slideshowIntervalMs]);
-
-  const handleSlideshowImagesChange = useCallback((nextImages: SlideshowImage[]) => {
-    setSlideshowImportError(null);
-    setSlideshowImages((previousImages) => {
-      if (nextImages.length === 0) {
-        return previousImages;
-      }
-
-      const retainedPaths = new Set(
-        nextImages
-          .map((image) => image.filePath)
-          .filter((filePath): filePath is string => Boolean(filePath))
-      );
-      const removedImages = previousImages.filter(
-        (image) => image.filePath && !retainedPaths.has(image.filePath)
-      );
-
-      void removeStoredSlideshowImages(removedImages);
-      return nextImages;
-    });
-  }, []);
-
-  const importSlideshowImages = useCallback(
-    async (mode: "replace" | "append") => {
-      if (slideshowImportPending) {
-        return;
-      }
-
-      setSlideshowImportPending(true);
-      setSlideshowImportError(null);
-
+    const storedWidgets = window.localStorage.getItem(WIDGETS_STORAGE_KEY);
+    if (storedWidgets) {
       try {
-        const importedImages = await pickAndImportSlideshowImages();
-        if (importedImages.length === 0) {
-          return;
+        const parsed = JSON.parse(storedWidgets) as WidgetConfig[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setWidgets(parsed);
         }
-
-        setSlideshowImages((previousImages) => {
-          const nextImages =
-            mode === "replace"
-              ? importedImages
-              : [...previousImages, ...importedImages];
-
-          if (mode === "replace") {
-            void removeStoredSlideshowImages(previousImages);
-          }
-
-          return nextImages;
-        });
-      } catch (error) {
-        console.error(error);
-        setSlideshowImportError(
-          "Could not import photos. Check that Google Photos or Gallery access is available on this device and try again."
-        );
-      } finally {
-        setSlideshowImportPending(false);
+      } catch {
+        // corrupted storage — fall back to defaults
       }
-    },
-    [slideshowImportPending]
-  );
+    }
+
+    initialLoadDoneRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !initialLoadDoneRef.current) return;
+    window.localStorage.setItem(WIDGETS_STORAGE_KEY, JSON.stringify(widgets));
+  }, [widgets]);
 
   const removeWidget = useCallback((id: string) => {
     setWidgets((prev) => prev.filter((w) => w.id !== id));
@@ -303,14 +234,36 @@ export default function SmartDisplayPage() {
 
   const resizeWidget = useCallback((id: string, size: WidgetSize) => {
     setWidgets((prev) =>
-      prev.map((w) => (w.id === id ? { ...w, size } : w))
+      prev.map((w) => {
+        if (w.id !== id) return w;
+        if (size === "medium" && WIDGET_MEDIUM_VERTICAL.has(w.type)) {
+          return { ...w, size, colSpan: 1, rowSpan: 2 };
+        }
+        // For all other sizes / orientations, clear any span overrides so
+        // SIZE_SPANS drives the dimensions.
+        return { ...w, size, colSpan: undefined, rowSpan: undefined };
+      })
+    );
+  }, []);
+
+  const resizeSlideshowWidget = useCallback((id: string, colSpan: number, rowSpan: number) => {
+    setWidgets((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, colSpan, rowSpan } : w))
     );
   }, []);
 
   const addWidget = useCallback((type: WidgetType) => {
     const id = `${type}-${Date.now()}`;
     setWidgets((prev) => {
-      const position = findFreePosition("medium", prev);
+      if (type === "slideshow") {
+        const position = findFreePosition("medium", prev, 2, 2, "slideshow");
+        return [...prev, { id, type, size: "medium", position, colSpan: 2, rowSpan: 2 }];
+      }
+      if (WIDGET_MEDIUM_VERTICAL.has(type)) {
+        const position = findFreePosition("medium", prev, 1, 2, type);
+        return [...prev, { id, type, size: "medium", position, colSpan: 1, rowSpan: 2 }];
+      }
+      const position = findFreePosition("medium", prev, undefined, undefined, type);
       return [...prev, { id, type, size: "medium", position }];
     });
   }, []);
@@ -338,7 +291,7 @@ export default function SmartDisplayPage() {
       const dragging = widgets.find((w) => w.id === draggingId);
       if (!dragging) return;
       const { col, row } = getGridCell(gridRef.current, e.clientX, e.clientY);
-      if (isValidDrop(draggingId, col, row, dragging.size, widgets)) {
+      if (isValidDrop(draggingId, dragging.type, col, row, dragging.size, widgets, dragging.colSpan, dragging.rowSpan)) {
         setDropTarget({ col, row });
         e.dataTransfer.dropEffect = "move";
       } else {
@@ -380,11 +333,8 @@ export default function SmartDisplayPage() {
 
   return (
     <div className="relative isolate min-h-dvh w-full overflow-x-hidden bg-black select-none">
-      {/* Background slideshow */}
-      <BackgroundSlideshow
-        images={slideshowImages}
-        intervalMs={slideshowIntervalMs}
-      />
+      {/* Static dark background */}
+      <div className="fixed inset-0 z-0 bg-black" />
 
       {/* Main content area */}
       <div className="relative z-10 flex min-h-dvh w-full flex-col gap-4 p-6">
@@ -398,7 +348,8 @@ export default function SmartDisplayPage() {
         >
           {/* Drop target indicator */}
           {editMode && dropTarget && draggingWidget && (() => {
-            const { colSpan, rowSpan } = SIZE_SPANS[draggingWidget.size];
+            const colSpan = draggingWidget.colSpan ?? SIZE_SPANS[draggingWidget.size].colSpan;
+            const rowSpan = draggingWidget.rowSpan ?? SIZE_SPANS[draggingWidget.size].rowSpan;
             return (
               <div
                 className="rounded-2xl border-2 border-dashed border-white/60 bg-white/10 pointer-events-none z-0 transition-all duration-100"
@@ -413,17 +364,21 @@ export default function SmartDisplayPage() {
           })()}
 
           <AnimatePresence mode="popLayout">
-            {widgets.map((widget) => (
+            {[...widgets].sort((a, b) => (a.type === "slideshow" ? -1 : b.type === "slideshow" ? 1 : 0)).map((widget) => (
               <WidgetWrapper
                 key={widget.id}
                 id={widget.id}
                 size={widget.size}
                 position={widget.position}
+                colSpan={widget.colSpan}
+                rowSpan={widget.rowSpan}
+                transparent={widget.type === "slideshow"}
                 editMode={editMode}
                 isDragging={draggingId === widget.id}
                 hasSettings={WIDGETS_WITH_SETTINGS.includes(widget.type)}
                 onRemove={removeWidget}
-                onResize={resizeWidget}
+                onResize={widget.type !== "slideshow" ? resizeWidget : undefined}
+                onResizeCustom={widget.type === "slideshow" ? resizeSlideshowWidget : undefined}
                 onDragStart={setDraggingId}
                 onDragEnd={() => { setDraggingId(null); setDropTarget(null); }}
                 onSettings={setSettingsWidgetId}
@@ -472,18 +427,6 @@ export default function SmartDisplayPage() {
         widgets={widgets}
         onAdd={addWidget}
         onClose={() => setEditPanelOpen(false)}
-        slideshowImages={slideshowImages}
-        slideshowIntervalMs={slideshowIntervalMs}
-        onSlideshowImagesChange={handleSlideshowImagesChange}
-        onSlideshowIntervalChange={(intervalMs) => {
-          setSlideshowIntervalMs(normalizeSlideIntervalMs(intervalMs));
-        }}
-        canImportFromDevice={isAndroidNativePlatform()}
-        importPending={slideshowImportPending}
-        importError={slideshowImportError}
-        onImportFromDevice={(mode) => {
-          void importSlideshowImages(mode);
-        }}
       />
 
       {/* Widget settings modal */}

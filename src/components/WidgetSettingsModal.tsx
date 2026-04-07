@@ -1,18 +1,32 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, Plus, Trash2, Settings, CalendarDays, Link2, Loader2 } from "lucide-react";
+import { X, Plus, Trash2, Settings, CalendarDays, Link2, Loader2, Images } from "lucide-react";
 import type {
   WidgetConfig,
   ClockSettings,
   WeatherSettings,
   CalendarSettings,
   SmartHomeSettings,
+  SlideshowSettings,
+  SlideshowImage,
   SmartDevice,
   DeviceIcon,
 } from "@/types";
 import { DEFAULT_DEVICES, ICONS } from "@/components/widgets/SmartHomeWidget";
 import { searchWeatherCities, type WeatherCitySuggestion } from "@/lib/weather";
+import {
+  DEFAULT_SLIDESHOW_IMAGES,
+  PRESET_ALBUMS,
+  createRemoteSlideshowImage,
+  isAndroidNativePlatform,
+  pickAndImportSlideshowImages,
+} from "@/lib/slideshowMedia";
+import {
+  DEFAULT_SLIDE_INTERVAL_MS,
+  formatSlideInterval,
+  normalizeSlideIntervalMs,
+} from "@/lib/slideshow";
 import {
   clearGoogleCalendarSession,
   fetchGoogleCalendars,
@@ -92,6 +106,7 @@ export default function WidgetSettingsModal({ widget, onSave, onClose }: Props) 
             {widget.type === "weather" && "Weather Settings"}
             {widget.type === "calendar" && "Calendar Settings"}
             {widget.type === "smarthome" && "Smart Home Devices"}
+            {widget.type === "slideshow" && "Slideshow Settings"}
           </h2>
           <button
             onClick={onClose}
@@ -126,6 +141,12 @@ export default function WidgetSettingsModal({ widget, onSave, onClose }: Props) 
             <SmartHomeSettingsForm
               settings={localSettings as SmartHomeSettings | undefined}
               onChange={setLocalSettings as (s: SmartHomeSettings) => void}
+            />
+          )}
+          {widget.type === "slideshow" && (
+            <SlideshowSettingsForm
+              settings={localSettings as SlideshowSettings | undefined}
+              onChange={setLocalSettings as (s: SlideshowSettings) => void}
             />
           )}
         </div>
@@ -348,7 +369,7 @@ function WeatherSettingsForm({
           )}
         </div>
         <p className="text-xs text-white/30 mt-1">
-          Pick a city from the suggestions so the widget only saves supported locations.
+          Pick a city from the suggestions.
         </p>
       </Field>
 
@@ -785,6 +806,172 @@ function InputField({
         placeholder={placeholder}
         className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white placeholder-white/20 focus:outline-none focus:border-white/30"
       />
+    </div>
+  );
+}
+
+/* ─── Slideshow ──────────────────────────────────────────── */
+
+const INTERVAL_PRESETS = [
+  { label: "1 min",  ms: 60_000 },
+  { label: "2 min",  ms: 2 * 60_000 },
+  { label: "5 min",  ms: 5 * 60_000 },
+  { label: "10 min", ms: 10 * 60_000 },
+  { label: "15 min", ms: 15 * 60_000 },
+  { label: "30 min", ms: 30 * 60_000 },
+  { label: "1 hr",   ms: 60 * 60_000 },
+  { label: "2 hr",   ms: 2 * 60 * 60_000 },
+  { label: "4 hr",   ms: 4 * 60 * 60_000 },
+  { label: "8 hr",   ms: 8 * 60 * 60_000 },
+  { label: "12 hr",  ms: 12 * 60 * 60_000 },
+  { label: "24 hr",  ms: 24 * 60 * 60_000 },
+];
+
+function SlideshowSettingsForm({
+  settings,
+  onChange,
+}: {
+  settings?: SlideshowSettings;
+  onChange: (s: SlideshowSettings) => void;
+}) {
+  const [newImageUrl, setNewImageUrl] = useState("");
+  const [importPending, setImportPending] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const images: SlideshowImage[] = settings?.images ?? DEFAULT_SLIDESHOW_IMAGES;
+  const intervalMs: number = settings?.intervalMs ?? DEFAULT_SLIDE_INTERVAL_MS;
+  const canImportFromDevice = isAndroidNativePlatform();
+
+  const update = (patch: Partial<SlideshowSettings>) =>
+    onChange({ images, intervalMs, ...settings, ...patch });
+
+  const addUrl = () => {
+    const url = newImageUrl.trim();
+    if (!url) return;
+    update({ images: [...images, createRemoteSlideshowImage(url)] });
+    setNewImageUrl("");
+  };
+
+  const removeImage = (index: number) => {
+    if (images.length <= 1) return;
+    update({ images: images.filter((_, i) => i !== index) });
+  };
+
+  const importFromDevice = async () => {
+    setImportPending(true);
+    setImportError(null);
+    try {
+      const imported = await pickAndImportSlideshowImages();
+      if (imported.length > 0) {
+        update({ images: [...images, ...imported] });
+      }
+    } catch {
+      setImportError("Could not import photos. Check Gallery/Google Photos access.");
+    } finally {
+      setImportPending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Slide interval */}
+      <Field label="Photo change interval">
+        <div className="grid grid-cols-4 gap-1.5">
+          {INTERVAL_PRESETS.map(({ label, ms }) => (
+            <button
+              key={ms}
+              onClick={() => update({ intervalMs: ms })}
+              className={`rounded-lg py-1.5 text-xs font-medium border transition-colors
+                ${normalizeSlideIntervalMs(intervalMs) === ms
+                  ? "bg-blue-600/30 border-blue-500/50 text-blue-300"
+                  : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white"
+                }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs text-white/30">
+          Current: <span className="text-white/50">{formatSlideInterval(intervalMs)}</span>
+        </p>
+      </Field>
+
+      {/* Preset albums */}
+      <Field label="Built-in albums">
+        <div className="grid grid-cols-2 gap-1.5">
+          {PRESET_ALBUMS.map(({ label, images: albumImages }) => (
+            <button
+              key={label}
+              onClick={() => update({ images: albumImages })}
+              className="py-1.5 px-3 rounded-lg text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/15 border border-white/10 transition-colors"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </Field>
+
+      {/* Device import (Android only) */}
+      {canImportFromDevice && (
+        <Field label="From device">
+          <button
+            onClick={() => void importFromDevice()}
+            disabled={importPending}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-xl text-sm text-white/60 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 disabled:opacity-40 transition-colors"
+          >
+            {importPending ? <Loader2 size={14} className="animate-spin" /> : <Images size={14} />}
+            {importPending ? "Importing…" : "Pick photos"}
+          </button>
+          {importError && <p className="mt-1.5 text-xs text-amber-300/90">{importError}</p>}
+        </Field>
+      )}
+
+      {/* Add by URL */}
+      <Field label="Add image URL">
+        <div className="flex gap-1.5">
+          <input
+            type="text"
+            value={newImageUrl}
+            onChange={(e) => setNewImageUrl(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addUrl()}
+            placeholder="https://…"
+            className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-white/20 focus:outline-none focus:border-white/30"
+          />
+          <button
+            onClick={addUrl}
+            disabled={!newImageUrl.trim()}
+            className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white/60 hover:text-white transition-colors"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </Field>
+
+      {/* Current images list */}
+      <Field label={`Images (${images.length})`}>
+        <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto scrollbar-hide">
+          {images.map((image, i) => (
+            <div
+              key={image.id}
+              className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-white/60 truncate">{image.label}</p>
+                <p className="text-[10px] text-white/30 truncate">
+                  {image.origin === "device" ? "Selected from device" : image.src}
+                </p>
+              </div>
+              <button
+                onClick={() => removeImage(i)}
+                disabled={images.length <= 1}
+                className="text-white/20 hover:text-red-400 disabled:opacity-30 shrink-0 transition-colors"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </Field>
     </div>
   );
 }

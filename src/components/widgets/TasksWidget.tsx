@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Circle, Plus } from "lucide-react";
 import type { Task } from "@/types";
+import type { WidgetSize } from "@/types";
 
 const UNDO_WINDOW_MS = 60_000;
 
@@ -21,7 +22,7 @@ function formatUndoTime(remainingMs: number) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
-export default function TasksWidget() {
+export default function TasksWidget({ size = "medium" }: { size?: WidgetSize }) {
   const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
   const [newTask, setNewTask] = useState("");
   const [adding, setAdding] = useState(false);
@@ -132,7 +133,7 @@ export default function TasksWidget() {
         </span>
       </div>
 
-      <div className="min-h-0 max-h-56 flex-1 space-y-1.5 overflow-y-auto pr-1 scrollbar-hide">
+      <div className={`min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1 scrollbar-hide ${size === "small" ? "max-h-[calc(3*2.75rem)]" : ""}`}>
         {orderedTasks.map((task) => {
           const remainingMs = task.completedAt
             ? Math.max(0, task.completedAt + UNDO_WINDOW_MS - now)

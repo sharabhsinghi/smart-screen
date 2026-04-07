@@ -3,7 +3,8 @@ export type WidgetType =
   | "weather"
   | "calendar"
   | "tasks"
-  | "smarthome";
+  | "smarthome"
+  | "slideshow";
 
 export type WidgetSize = "small" | "medium" | "large";
 
@@ -40,12 +41,20 @@ export interface SmartHomeSettings {
   devices: SmartDevice[];
 }
 
+export interface SlideshowSettings {
+  images: SlideshowImage[];
+  intervalMs: number;
+}
+
 export interface WidgetConfig {
   id: string;
   type: WidgetType;
   size: WidgetSize;
   position: { col: number; row: number };
-  settings?: ClockSettings | WeatherSettings | CalendarSettings | SmartHomeSettings;
+  /** Override the size-based span — used by the slideshow widget for arbitrary grid coverage */
+  colSpan?: number;
+  rowSpan?: number;
+  settings?: ClockSettings | WeatherSettings | CalendarSettings | SmartHomeSettings | SlideshowSettings;
 }
 
 export interface WeatherData {

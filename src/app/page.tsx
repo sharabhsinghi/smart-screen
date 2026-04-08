@@ -2,9 +2,10 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { AnimatePresence } from "framer-motion";
-import { Settings, X } from "lucide-react";
+import { Settings, X, PanelRight } from "lucide-react";
 
 import WidgetWrapper, { SIZE_SPANS } from "@/components/WidgetWrapper";
+import BackgroundSlideshow from "@/components/BackgroundSlideshow";
 import EditModePanel from "@/components/EditModePanel";
 import WidgetSettingsModal from "@/components/WidgetSettingsModal";
 import CalendarWidget from "@/components/widgets/CalendarWidget";
@@ -166,6 +167,7 @@ export default function SmartDisplayPage() {
   const [editMode, setEditMode] = useState(false);
   const [editPanelOpen, setEditPanelOpen] = useState(false);
   const [settingsWidgetId, setSettingsWidgetId] = useState<string | null>(null);
+  const [slideshowGlowColor, setSlideshowGlowColor] = useState<string | undefined>(undefined);
 
   // Drag-and-drop state
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -332,16 +334,16 @@ export default function SmartDisplayPage() {
   const draggingWidget = draggingId ? widgets.find((w) => w.id === draggingId) : null;
 
   return (
-    <div className="relative isolate min-h-dvh w-full overflow-x-hidden bg-black select-none">
-      {/* Static dark background */}
-      <div className="fixed inset-0 z-0 bg-black" />
+    <div className="relative isolate h-dvh w-full overflow-x-hidden bg-black select-none">
+      {/* Background with ambient color from slideshow widget */}
+      <BackgroundSlideshow images={[]} accentColor={slideshowGlowColor} />
 
       {/* Main content area */}
-      <div className="relative z-10 flex min-h-dvh w-full flex-col gap-4 p-6">
+      <div className="relative z-10 flex h-dvh w-full flex-col gap-4 overflow-y-auto p-6">
         {/* Widget grid */}
         <div
           ref={gridRef}
-          className="flex-1 grid grid-cols-4 grid-rows-3 gap-4 auto-rows-fr relative"
+          className="flex-1 grid landscape:max-h-[95dvh] grid-cols-4 grid-rows-3 gap-4 auto-rows-fr relative"
           onDragOver={editMode ? handleGridDragOver : undefined}
           onDrop={editMode ? handleGridDrop : undefined}
           onDragLeave={editMode ? handleGridDragLeave : undefined}
@@ -383,7 +385,9 @@ export default function SmartDisplayPage() {
                 onDragEnd={() => { setDraggingId(null); setDropTarget(null); }}
                 onSettings={setSettingsWidgetId}
               >
-                {renderWidget(widget)}
+                {widget.type === "slideshow"
+                  ? <SlideshowWidget settings={widget.settings as SlideshowSettings | undefined} onColorChange={setSlideshowGlowColor} />
+                  : renderWidget(widget)}
               </WidgetWrapper>
             ))}
           </AnimatePresence>
@@ -395,6 +399,15 @@ export default function SmartDisplayPage() {
             <span className="text-white/50 text-xs px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/10">
               Drag ⠿ to move · ⤢ resize · ⚙ configure · ✕ remove
             </span>
+          )}
+          {editMode && !editPanelOpen && (
+            <button
+              onClick={() => setEditPanelOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md text-sm font-medium transition-all bg-white/10 text-white/70 hover:bg-white/20 hover:text-white border border-white/10"
+            >
+              <PanelRight size={16} />
+              Widgets
+            </button>
           )}
           <button
             onClick={() => {

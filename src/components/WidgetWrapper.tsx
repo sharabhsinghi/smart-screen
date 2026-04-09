@@ -99,7 +99,7 @@ export default function WidgetWrapper({
             onDragStart?.(id);
           }}
           onDragEnd={() => onDragEnd?.()}
-          className="absolute top-2 left-2 z-10 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-white/10 transition-colors"
+          className="absolute top-2 left-2 z-20 cursor-grab active:cursor-grabbing p-1 rounded-md hover:bg-white/10 transition-colors"
           title="Drag to move"
         >
           <GripVertical size={14} className="text-white/40 hover:text-white/70" />

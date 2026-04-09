@@ -27,7 +27,13 @@ function extractDominantColor(img: HTMLImageElement): string | null {
     for (let i = 0; i < data.length; i += 4) {
       r += data[i]; g += data[i + 1]; b += data[i + 2];
     }
-    return `rgba(${Math.round(r / count)}, ${Math.round(g / count)}, ${Math.round(b / count)}, 0.55)`;
+    // Boost saturation by scaling deviation from mid-grey (128) by 2×
+    const boost = 2.0;
+    const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+    const rr = clamp(128 + (r / count - 128) * boost);
+    const gg = clamp(128 + (g / count - 128) * boost);
+    const bb = clamp(128 + (b / count - 128) * boost);
+    return `rgba(${rr}, ${gg}, ${bb}, 0.8)`;
   } catch {
     return null;
   }

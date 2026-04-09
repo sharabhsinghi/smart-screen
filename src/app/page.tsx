@@ -393,45 +393,47 @@ export default function SmartDisplayPage() {
           </AnimatePresence>
         </div>
 
-        {/* Bottom control bar */}
-        <div className="flex justify-end items-center gap-3">
-          {editMode && (
-            <span className="text-white/50 text-xs px-3 py-1.5 rounded-full bg-white/10 backdrop-blur-sm border border-white/10">
+      </div>
+
+      {/* Fixed bottom-right cluster: hints + widgets + edit/done */}
+      <div className="fixed bottom-4 right-4 z-30 flex items-center gap-2">
+        {editMode && (
+          <>
+            <span className="flex items-center text-white/50 text-xs px-3 py-2 rounded-xl bg-white/10 backdrop-blur-md border border-white/10">
               Drag ⠿ to move · ⤢ resize · ⚙ configure · ✕ remove
             </span>
-          )}
-          {editMode && !editPanelOpen && (
-            <button
-              onClick={() => setEditPanelOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md text-sm font-medium transition-all bg-white/10 text-white/70 hover:bg-white/20 hover:text-white border border-white/10"
-            >
-              <PanelRight size={16} />
-              Widgets
-            </button>
-          )}
-          <button
-            onClick={() => {
-              if (!editMode) {
-                setEditMode(true);
-                setEditPanelOpen(true);
-              } else {
-                setEditMode(false);
-                setEditPanelOpen(false);
-                setDraggingId(null);
-                setDropTarget(null);
-              }
-            }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full backdrop-blur-md text-sm font-medium transition-all
-              ${editMode
-                ? "bg-white/20 text-white border border-white/30"
-                : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white border border-white/10"
-              }
-            `}
-          >
-            {editMode ? <X size={16} /> : <Settings size={16} />}
-            {editMode ? "Done" : "Edit"}
-          </button>
-        </div>
+            {!editPanelOpen && (
+              <button
+                onClick={() => setEditPanelOpen(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md text-sm font-medium transition-all bg-white/10 text-white/70 hover:bg-white/20 hover:text-white border border-white/10"
+              >
+                <PanelRight size={15} />
+                Widgets
+              </button>
+            )}
+          </>
+        )}
+        <button
+          onClick={() => {
+            if (!editMode) {
+              setEditMode(true);
+            } else {
+              setEditMode(false);
+              setEditPanelOpen(false);
+              setDraggingId(null);
+              setDropTarget(null);
+            }
+          }}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md text-sm font-medium transition-all
+            ${editMode
+              ? "bg-white/20 text-white border border-white/30"
+              : "bg-white/10 text-white/70 hover:bg-white/20 hover:text-white border border-white/10"
+            }
+          `}
+        >
+          {editMode ? <X size={15} /> : <Settings size={15} />}
+          {editMode ? "Done" : "Edit"}
+        </button>
       </div>
 
       {/* Edit mode side panel */}
